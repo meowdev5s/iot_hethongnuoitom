@@ -1,0 +1,7 @@
+# Danh sách thư viện khi chạy trực tiếp trên web Wokwi (wokwi.com)
+LiquidCrystal I2C
+OneWire
+DallasTemperature
+ESP32Servo
+PubSubClient
+ArduinoJson

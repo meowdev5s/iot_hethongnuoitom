@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Shrimp Farm - Web Dashboard & Digital Twin Testbench</title>
+
+  <!-- Google Fonts & Chart.js & Paho MQTT -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+    rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+
+  <style>
+    :root {
+      --bg-main: #0a0f1d;
+      --bg-panel: rgba(16, 24, 45, 0.75);
+      --bg-card: rgba(22, 34, 62, 0.6);
+      --border-color: rgba(56, 189, 248, 0.15);
+      --border-glow: rgba(56, 189, 248, 0.35);
+      --primary: #38bdf8;
+      --primary-glow: rgba(56, 189, 248, 0.5);
+      --accent-green: #10b981;
+      --accent-red: #ef4444;
+      --accent-yellow: #f59e0b;
+      --accent-purple: #8b5cf6;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --font-sans: 'Outfit', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-main);
+      background-image:
+        radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(139, 92, 246, 0.08) 0%, transparent 40%);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      overflow-x: hidden;
+      padding-bottom: 2rem;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg-main);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+
+    /* Container */
+    .dashboard-container {
+      max-width: 1560px;
+      margin: 0 auto;
+      padding: 1.25rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* Header */
+    header {
+      background: var(--bg-panel);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 1rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .brand-text h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      background: linear-gradient(to right, #ffffff, #93c5fd);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-text p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .header-status-group {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.9rem;
+      border-radius: 20px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #64748b;
+    }
+
+    .status-dot.online {
+      background: var(--accent-green);
+      box-shadow: 0 0 10px var(--accent-green);
+      animation: pulse-green 2s infinite;
+    }
+
+    .status-dot.offline {
+      background: var(--accent-red);
+      box-shadow: 0 0 10px var(--accent-red);
+    }
+
+    @keyframes pulse-green {
+      0% {
+        transform: scale(0.95);
+        opacity: 0.8;
+      }
+
+      50% {
+        transform: scale(1.15);
+        opacity: 1;
+      }
+
+      100% {
+        transform: scale(0.95);
+        opacity: 0.8;
+      }
+    }
+
+    /* Alert Banner (Popup Bar) */
+    #alertBanner {
+      display: none;
+      background: linear-gradient(90deg, rgba(239, 68, 68, 0.9), rgba(185, 28, 28, 0.95));
+      border: 1px solid #f87171;
+      color: white;
+      border-radius: 12px;
+      padding: 0.85rem 1.25rem;
+      align-items: center;
+      justify-content: space-between;
+      animation: pulse-alert 1.5s infinite;
+      box-shadow: 0 0 25px rgba(239, 68, 68, 0.5);
+    }
+
+    @keyframes pulse-alert {
+
+      0%,
+      100% {
+        transform: scale(1);
+      }
+
+      50% {
+        transform: scale(1.008);
+        filter: brightness(1.15);
+      }
+    }
+
+    .alert-content {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 600;
+    }
+
+    .alert-icon {
+      font-size: 1.5rem;
+    }
+
+    /* 6 Sensor Cards Grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+    }
+
+    .metric-card {
+      background: var(--bg-panel);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 1.1rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .metric-card:hover {
+      transform: translateY(-3px);
+      border-color: var(--border-glow);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+    }
+
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, var(--card-color, #38bdf8), transparent);
+    }
+
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.5rem;
+    }
+
+    .metric-label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .card-value-group {
+      display: flex;
+      align-items: baseline;
+      gap: 0.4rem;
+      margin: 0.4rem 0;
+    }
+
+    .metric-value {
+      font-size: 2.1rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      letter-spacing: -1px;
+      color: #ffffff;
+    }
+
+    .metric-unit {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      padding-top: 0.4rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .status-tag {
+      padding: 0.15rem 0.5rem;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.72rem;
+    }
+
+    .tag-safe {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+    }
+
+    .tag-warn {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+    }
+
+    .tag-danger {
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.5;
+      }
+    }
+
+    /* Main Workspace: 2 Columns */
+    .workspace-layout {
+      display: grid;
+      grid-template-columns: 1.25fr 1fr;
+      gap: 1.25rem;
+    }
+
+    @media (max-width: 1100px) {
+      .workspace-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Sub-panels */
+    .panel {
+      background: var(--bg-panel);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.1rem;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 0.6rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .panel-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: #e2e8f0;
+    }
+
+    /* Chart Container */
+    .chart-wrapper {
+      position: relative;
+      height: 240px;
+      width: 100%;
+    }
+
+    /* Actuators Control & Status Group */
+    .actuators-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .actuator-card {
+      background: var(--bg-card);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 12px;
+      padding: 0.9rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 0.6rem;
+    }
+
+    .actuator-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .actuator-name {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .actuator-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #475569;
+    }
+
+    .actuator-indicator.active {
+      background: var(--accent-green);
+      box-shadow: 0 0 10px var(--accent-green);
+    }
+
+    .actuator-indicator.locked {
+      background: var(--accent-red);
+      box-shadow: 0 0 10px var(--accent-red);
+    }
+
+    .btn-toggle {
+      background: #1e293b;
+      color: white;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 0.45rem 0.7rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: var(--font-sans);
+    }
+
+    .btn-toggle:hover {
+      background: #334155;
+      border-color: #64748b;
+    }
+
+    .btn-toggle.btn-on {
+      background: linear-gradient(135deg, #059669, #10b981);
+      border-color: #10b981;
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+    }
+
+    .btn-toggle.btn-feed {
+      background: linear-gradient(135deg, #2563eb, #38bdf8);
+      border-color: #38bdf8;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+    }
+
+    .btn-toggle:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      box-shadow: none !important;
+    }
+
+    /* DIGITAL TWIN TESTBENCH STYLES (MỤC 4.3.3) */
+    .mode-switch-wrapper {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid var(--border-glow);
+      border-radius: 12px;
+      padding: 0.6rem 0.8rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .switch-labels {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    /* Fancy Toggle Slider */
+    .switch-toggle {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 26px;
+    }
+
+    .switch-toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #334155;
+      transition: .3s;
+      border-radius: 26px;
+      border: 1px solid #475569;
+    }
+
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+
+    input:checked+.toggle-slider {
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      border-color: #f472b6;
+    }
+
+    input:checked+.toggle-slider:before {
+      transform: translateX(24px);
+    }
+
+    /* Testbench Sliders */
+    .slider-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      margin-bottom: 0.6rem;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: #cbd5e1;
+    }
+
+    .slider-val-preview {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .custom-range {
+      width: 100%;
+      height: 6px;
+      background: #1e293b;
+      border-radius: 3px;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      transition: opacity 0.2s;
+    }
+
+    .custom-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--primary);
+      cursor: pointer;
+      box-shadow: 0 0 10px var(--primary-glow);
+      transition: transform 0.1s;
+    }
+
+    .custom-range::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    .custom-range:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    /* Quick Scenarios Buttons (Mục 5.2) */
+    .scenario-buttons-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.6rem;
+    }
+
+    .btn-scenario {
+      border: none;
+      border-radius: 10px;
+      padding: 0.65rem 0.5rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      text-align: center;
+      transition: all 0.2s;
+      color: white;
+    }
+
+    .btn-scenario:hover {
+      transform: translateY(-2px);
+    }
+
+    .btn-scenario:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .sc-safe {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.3));
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+
+    .sc-safe:hover {
+      background: rgba(16, 185, 129, 0.4);
+    }
+
+    .sc-drop-oxy {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(185, 28, 28, 0.3));
+      border: 1px solid rgba(239, 68, 68, 0.4);
+    }
+
+    .sc-drop-oxy:hover {
+      background: rgba(239, 68, 68, 0.4);
+    }
+
+    .sc-fan-jam {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.3));
+      border: 1px solid rgba(245, 158, 11, 0.4);
+    }
+
+    .sc-fan-jam:hover {
+      background: rgba(245, 158, 11, 0.4);
+    }
+
+    /* Testbench Logs */
+    .log-terminal {
+      background: #060913;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 0.6rem 0.8rem;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: #94a3b8;
+      height: 110px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .log-item {
+      display: flex;
+      gap: 0.4rem;
+    }
+
+    .log-time {
+      color: #64748b;
+    }
+
+    .log-warn {
+      color: #f59e0b;
+    }
+
+    .log-alert {
+      color: #ef4444;
+      font-weight: 600;
+    }
+
+    .log-ok {
+      color: #10b981;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      font-size: 0.78rem;
+      color: #64748b;
+      margin-top: 1rem;
+      font-family: var(--font-mono);
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="dashboard-container">
+
+    <!-- HEADER -->
+    <header>
+      <div class="brand-section">
+        <div class="brand-text">
+          <h1>HỆ THỐNG QUẢN LÝ TRANG TRẠI NUÔI TÔM THÔNG MINH</h1>
+          <p>Trạm Giám sát Ao 01 • Edge Node ESP32 • MQTT Cloud Architecture</p>
+        </div>
+      </div>
+
+      <div class="header-status-group">
+        <div class="status-badge">
+          <span id="mqttDot" class="status-dot offline"></span>
+          <span id="mqttText">MQTT: ĐANG KẾT NỐI...</span>
+        </div>
+        <div class="status-badge">
+          <span id="stationDot" class="status-dot offline"></span>
+          <span id="stationText">TRẠM AO: CHỜ TÍN HIỆU (LWT)</span>
+        </div>
+        <div class="status-badge" style="background: rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.3);">
+          <span>UPTIME: <strong id="uptimeVal">0s</strong></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ALERT BANNER -->
+    <div id="alertBanner">
+      <div class="alert-content">
+        <div>
+          <div style="font-size: 1rem;" id="alertTitle">CẢNH BÁO SỰ CỐ KHẨN CẤP!</div>
+          <div style="font-size: 0.85rem; font-weight: 400;" id="alertMsg">Hệ thống kích hoạt khóa liên động Interlock
+            tự động.</div>
+        </div>
+      </div>
+      <button class="btn-toggle" style="background: white; color: #b91c1c; border: none;" onclick="dismissAlert()">TẮT
+        CHUÔNG</button>
+    </div>
+
+    <!-- 6 REAL-TIME SENSOR CARDS -->
+    <div class="metrics-grid">
+
+      <!-- Card 1: DO (Oxy hòa tan) -->
+      <div class="metric-card" style="--card-color: #38bdf8;">
+        <div class="card-top">
+          <span class="metric-label">Oxy hòa tan (DO)</span>
+        </div>
+        <div class="card-value-group">
+          <span class="metric-value" id="valDO">--</span>
+          <span class="metric-unit">mg/L</span>
+        </div>
+        <div class="card-footer">
+          <span>Ngưỡng: &ge; 4.0 mg/L</span>
+          <span class="status-tag tag-safe" id="tagDO">BÌNH THƯỜNG</span>
+        </div>
+      </div>
+
+      <!-- Card 2: Nhiệt độ nước -->
+      <div class="metric-card" style="--card-color: #f59e0b;">
+        <div class="card-top">
+          <span class="metric-label">Nhiệt độ nước</span>
+        </div>
+        <div class="card-value-group">
+          <span class="metric-value" id="valTemp">--</span>
+          <span class="metric-unit">°C</span>
+        </div>
+        <div class="card-footer">
+          <span>Ngưỡng: 26 - 32 °C</span>
+          <span class="status-tag tag-safe" id="tagTemp">ỔN ĐỊNH</span>
+        </div>
+      </div>
+
+      <!-- Card 3: Độ pH -->
+      <div class="metric-card" style="--card-color: #10b981;">
+        <div class="card-top">
+          <span class="metric-label">Độ pH nước</span>
+        </div>
+        <div class="card-value-group">
+          <span class="metric-value" id="valPH">--</span>
+          <span class="metric-unit">pH</span>
+        </div>
+        <div class="card-footer">
+          <span>Ngưỡng: 7.5 - 8.5</span>
+          <span class="status-tag tag-safe" id="tagPH">AN TOÀN</span>
+        </div>
+      </div>
+
+      <!-- Card 4: Độ mặn -->
+      <div class="metric-card" style="--card-color: #8b5cf6;">
+        <div class="card-top">
+          <span class="metric-label">Độ mặn (Salinity)</span>
+        </div>
+        <div class="card-value-group">
+          <span class="metric-value" id="valSal">--</span>
+          <span class="metric-unit">ppt</span>
+        </div>
+        <div class="card-footer">
+          <span>Ngưỡng: 10 - 25 ppt</span>
+          <span class="status-tag tag-safe" id="tagSal">THÍCH HỢP</span>
+        </div>
+      </div>
+
+      <!-- Card 5: Dòng tải quạt -->
+      <div class="metric-card" style="--card-color: #ec4899;">
+        <div class="card-top">
+          <span class="metric-label">Dòng tải quạt (CT)</span>
+        </div>
+        <div class="card-value-group">
+          <span class="metric-value" id="valFanAmp">--</span>
+          <span class="metric-unit">A</span>
+        </div>
+        <div class="card-footer">
+          <span>Quá tải: &gt; 16.0 A</span>
+          <span class="status-tag tag-safe" id="tagFanAmp">BÌNH THƯỜNG</span>
+        </div>
+      </div>
+
+      <!-- Card 6: Mực nước -->
+      <div class="metric-card" style="--card-color: #06b6d4;">
+        <div class="card-top">
+          <span class="metric-label">Mực nước ao (HC-SR04)</span>
+        </div>
+        <div class="card-value-group">
+          <span class="metric-value" id="valWater">--</span>
+          <span class="metric-unit">cm</span>
+        </div>
+        <div class="card-footer">
+          <span>Ngưỡng: 100 - 150 cm</span>
+          <span class="status-tag tag-safe" id="tagWater">ĐẠT CHUẨN</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- WORKSPACE: CHART & CONTROL (LEFT) vs DIGITAL TWIN TESTBENCH (RIGHT) -->
+    <div class="workspace-layout">
+
+      <!-- LEFT COLUMN: REAL-TIME CHART & CONTROLS -->
+      <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+
+        <!-- LIVE CHART (Chart.js) -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span>BIỂU ĐỒ BIẾN THIÊN OXY HÒA TAN (DO) & pH (REAL-TIME)</span>
+            </div>
+            <div style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted);">
+              Cập nhật mỗi 2s • Lưu 40 mẫu gần nhất
+            </div>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="liveChart"></canvas>
+          </div>
+        </div>
+
+        <!-- ACTUATOR STATUS & REMOTE CONTROL (KB4) -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <span>ĐIỀU KHIỂN & TRẠNG THÁI THIẾT BỊ TẠI AO (2 CHIỀU)</span>
+            </div>
+            <span id="interlockBadge" class="status-tag tag-safe">INTERLOCK: SẴN SÀNG</span>
+          </div>
+
+          <div class="actuators-grid">
+
+            <!-- Relay 1 (Quạt 1) -->
+            <div class="actuator-card">
+              <div class="actuator-info">
+                <span class="actuator-name">QUẠT CHÍNH (Q1)</span>
+                <span id="indRelay1" class="actuator-indicator active"></span>
+              </div>
+              <div style="font-size: 0.72rem; color: #94a3b8;">Relay 1 • GPIO 19</div>
+              <button id="btnRelay1" class="btn-toggle btn-on" onclick="toggleRelay('relay1')">QUẠT 1: ĐANG BẬT</button>
+            </div>
+
+            <!-- Relay 2 (Quạt 2) -->
+            <div class="actuator-card">
+              <div class="actuator-info">
+                <span class="actuator-name">QUẠT PHỤ (Q2)</span>
+                <span id="indRelay2" class="actuator-indicator"></span>
+              </div>
+              <div style="font-size: 0.72rem; color: #94a3b8;">Relay 2 • GPIO 25</div>
+              <button id="btnRelay2" class="btn-toggle" onclick="toggleRelay('relay2')">QUẠT 2: ĐANG TẮT</button>
+            </div>
+
+            <!-- Servo Cho Ăn -->
+            <div class="actuator-card">
+              <div class="actuator-info">
+                <span class="actuator-name">MÁY CHO ĂN</span>
+                <span id="indServo" class="actuator-indicator"></span>
+              </div>
+              <div style="font-size: 0.72rem; color: #94a3b8;">Servo SG90 • GPIO 26</div>
+              <button id="btnFeed" class="btn-toggle btn-feed" onclick="triggerFeed()">XẢ THỨC ĂN (2S)</button>
+            </div>
+
+            <!-- Buzzer & Đèn Báo -->
+            <div class="actuator-card">
+              <div class="actuator-info">
+                <span class="actuator-name">CÒI / ĐÈN CẢNH BÁO</span>
+                <span id="indBuzzer" class="actuator-indicator"></span>
+              </div>
+              <div style="font-size: 0.72rem; color: #94a3b8;">Buzzer • LED Xanh/Đỏ</div>
+              <div id="alarmStatusText"
+                style="font-size: 0.78rem; font-weight: 600; color: #10b981; padding-top: 0.4rem;">
+                Trạng thái: An toàn (LED Xanh)
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT COLUMN: DIGITAL TWIN TESTBENCH (MỤC 4.3.3) -->
+      <div class="panel">
+
+        <div class="panel-header">
+          <div class="panel-title">
+            <span>DIGITAL TWIN TESTBENCH (GIẢ LẬP MÔI TRƯỜNG TỪ WEB)</span>
+          </div>
+          <span style="font-size: 0.75rem; color: var(--accent-purple); font-weight: 600;">MỤC 4.3.3</span>
+        </div>
+
+        <!-- MODE SWITCH -->
+        <div class="mode-switch-wrapper">
+          <div class="switch-labels">
+            <span>CẢM BIẾN THẬT (WOKWI)</span>
+            <label class="switch-toggle">
+              <input type="checkbox" id="chkSandboxMode" onchange="onToggleSandboxMode()">
+              <span class="toggle-slider"></span>
+            </label>
+            <span style="color: #c084fc;">DIGITAL TWIN SANDBOX</span>
+          </div>
+          <span id="modeBadge" class="status-tag tag-safe">CHẾ ĐỘ LIVE</span>
+        </div>
+
+        <!-- 3 QUICK SCENARIO BUTTONS (MỤC 5.2) -->
+        <div>
+          <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.45rem;">
+            KỊCH BẢN KIỂM THỬ NHANH THEO BÁO CÁO (CHƯƠNG 5):
+          </div>
+          <div class="scenario-buttons-grid">
+            <button class="btn-scenario sc-safe" id="btnScSafe" onclick="applyScenario('safe')" disabled>
+              <span>KB 1: VẬN HÀNH BÌNH THƯỜNG</span>
+            </button>
+            <button class="btn-scenario sc-drop-oxy" id="btnScOxy" onclick="applyScenario('drop_oxy')" disabled>
+              <span>KB 2: SỤT OXY BAN ĐÊM</span>
+            </button>
+            <button class="btn-scenario sc-fan-jam" id="btnScFan" onclick="applyScenario('fan_jam')" disabled>
+              <span>KB 3: QUẠT KẸT/QUÁ TẢI</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 6 SLIDERS FOR SENSOR OVERRIDE -->
+        <div id="slidersContainer" style="opacity: 0.45; pointer-events: none; transition: all 0.3s;">
+
+          <!-- Slider 1: DO -->
+          <div class="slider-row">
+            <div class="slider-header">
+              <span>Oxy hòa tan DO:</span>
+              <span class="slider-val-preview"><span id="sbValDO">5.2</span> mg/L</span>
+            </div>
+            <input type="range" class="custom-range" id="slDO" min="0" max="10" step="0.1" value="5.2"
+              oninput="onSliderChange()">
+          </div>
+
+          <!-- Slider 2: Nhiệt độ -->
+          <div class="slider-row">
+            <div class="slider-header">
+              <span>Nhiệt độ nước:</span>
+              <span class="slider-val-preview"><span id="sbValTemp">28.5</span> °C</span>
+            </div>
+            <input type="range" class="custom-range" id="slTemp" min="20" max="40" step="0.5" value="28.5"
+              oninput="onSliderChange()">
+          </div>
+
+          <!-- Slider 3: pH -->
+          <div class="slider-row">
+            <div class="slider-header">
+              <span>Độ pH:</span>
+              <span class="slider-val-preview"><span id="sbValPH">7.8</span></span>
+            </div>
+            <input type="range" class="custom-range" id="slPH" min="4" max="11" step="0.1" value="7.8"
+              oninput="onSliderChange()">
+          </div>
+
+          <!-- Slider 4: Dòng tải quạt -->
+          <div class="slider-row">
+            <div class="slider-header">
+              <span>Dòng tải quạt (CT):</span>
+              <span class="slider-val-preview"><span id="sbValFanAmp">9.5</span> A</span>
+            </div>
+            <input type="range" class="custom-range" id="slFanAmp" min="0" max="20" step="0.5" value="9.5"
+              oninput="onSliderChange()">
+          </div>
+
+          <!-- Slider 5: Độ mặn -->
+          <div class="slider-row">
+            <div class="slider-header">
+              <span>Độ mặn (Salinity):</span>
+              <span class="slider-val-preview"><span id="sbValSal">18.0</span> ppt</span>
+            </div>
+            <input type="range" class="custom-range" id="slSal" min="0" max="35" step="1" value="18"
+              oninput="onSliderChange()">
+          </div>
+
+          <!-- Slider 6: Mực nước -->
+          <div class="slider-row">
+            <div class="slider-header">
+              <span>Mực nước ao:</span>
+              <span class="slider-val-preview"><span id="sbValWater">120</span> cm</span>
+            </div>
+            <input type="range" class="custom-range" id="slWater" min="20" max="200" step="5" value="120"
+              oninput="onSliderChange()">
+          </div>
+
+        </div>
+
+        <!-- TESTBENCH AUDIT TRAIL / LOG -->
+        <div>
+          <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.35rem;">
+            NHẬT KÝ KIỂM THỬ SỰ KIỆN (TESTBENCH AUDIT TRAIL):
+          </div>
+          <div class="log-terminal" id="testLogTerminal">
+            <div class="log-item">
+              <span class="log-time">[HỆ THỐNG]</span>
+              <span>Đang kết nối Broker HiveMQ WebSocket (port 8884)...</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+      Hệ thống IoT Nuôi tôm thông minh - Đề tài 16 - Nhóm 2
+    </footer>
+
+  </div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    // 1. CẤU HÌNH MQTT WEBSOCKET
+    const MQTT_HOST = "broker.hivemq.com";
+    const MQTT_PORT = 8884; // WebSocket Secure port của HiveMQ Cloud
+    const MQTT_PATH = "/mqtt";
+    const CLIENT_ID = "WebDashboard_ShrimpFarm_" + Math.random().toString(16).substring(2, 8);
+
+    // Cây Topics theo Mục 4.2 Sườn Báo cáo (Định danh nhóm riêng)
+    const TOPIC_STATUS = "nhom2_quanhoicanh/farm/pond_01/status";
+    const TOPIC_TELEMETRY = "nhom2_quanhoicanh/farm/pond_01/telemetry";
+    const TOPIC_ALERT = "nhom2_quanhoicanh/farm/pond_01/alert";
+    const TOPIC_CONTROL = "nhom2_quanhoicanh/farm/pond_01/control";
+    const TOPIC_SANDBOX = "nhom2_quanhoicanh/farm/pond_01/sandbox";
+
+    let mqttClient = null;
+    let isConnected = false;
+    let currentRelay1 = true;
+    let currentRelay2 = false;
+    let currentAlertMode = false;
+    let audioCtx = null;
+
+    // 2. KHỞI TẠO BIỂU ĐỒ CHART.JS
+    const ctx = document.getElementById('liveChart').getContext('2d');
+    const MAX_DATA_POINTS = 40;
+
+    const liveChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: 'Oxy hòa tan DO (mg/L)',
+            data: [],
+            borderColor: '#38bdf8',
+            backgroundColor: 'rgba(56, 189, 248, 0.1)',
+            fill: true,
+            tension: 0.35,
+            borderWidth: 2,
+            pointRadius: 2,
+            yAxisID: 'yDO'
+          },
+          {
+            label: 'Độ pH nước',
+            data: [],
+            borderColor: '#10b981',
+            backgroundColor: 'transparent',
+            tension: 0.35,
+            borderWidth: 2,
+            pointRadius: 2,
+            yAxisID: 'yPH'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 300 },
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            labels: { color: '#94a3b8', font: { family: 'Outfit', size: 12 } }
+          },
+          tooltip: {
+            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+            titleFont: { family: 'JetBrains Mono' },
+            bodyFont: { family: 'Outfit' }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+            ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 10 } }
+          },
+          yDO: {
+            type: 'linear',
+            position: 'left',
+            min: 0,
+            max: 10,
+            title: { display: true, text: 'DO (mg/L)', color: '#38bdf8' },
+            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+            ticks: { color: '#38bdf8' }
+          },
+          yPH: {
+            type: 'linear',
+            position: 'right',
+            min: 4,
+            max: 11,
+            title: { display: true, text: 'pH', color: '#10b981' },
+            grid: { drawOnChartArea: false },
+            ticks: { color: '#10b981' }
+          }
+        }
+      }
+    });
+
+    // 3. KẾT NỐI VÀ XỬ LÝ SỰ KIỆN MQTT
+    function initMQTT() {
+      addLog("Khởi tạo kết nối HiveMQ Broker qua WSS...", "info");
+      mqttClient = new Paho.MQTT.Client(MQTT_HOST, Number(MQTT_PORT), MQTT_PATH, CLIENT_ID);
+
+      mqttClient.onConnectionLost = onConnectionLost;
+      mqttClient.onMessageArrived = onMessageArrived;
+
+      const connectOptions = {
+        useSSL: true,
+        timeout: 5,
+        keepAliveInterval: 30,
+        cleanSession: true,
+        onSuccess: onConnectSuccess,
+        onFailure: onConnectFailure
+      };
+
+      try {
+        mqttClient.connect(connectOptions);
+      } catch (err) {
+        addLog("Lỗi khởi tạo MQTT: " + err.message, "alert");
+      }
+    }
+
+    function onConnectSuccess() {
+      isConnected = true;
+      document.getElementById('mqttDot').className = "status-dot online";
+      document.getElementById('mqttText').innerText = "MQTT: ONLINE (WSS:8884)";
+      addLog("Kết nối Broker thành công! Đang Subscribe các Topic...", "ok");
+
+      mqttClient.subscribe(TOPIC_STATUS);
+      mqttClient.subscribe(TOPIC_TELEMETRY);
+      mqttClient.subscribe(TOPIC_ALERT);
+      addLog("Đã đăng ký Topic: telemetry, alert, status", "ok");
+    }
+
+    function onConnectFailure(response) {
+      isConnected = false;
+      document.getElementById('mqttDot').className = "status-dot offline";
+      document.getElementById('mqttText').innerText = "MQTT: THẤT BẠI (Mã: " + response.errorCode + ")";
+      addLog("Kết nối Broker thất bại: " + response.errorMessage + ". Thử lại sau 5s...", "alert");
+      setTimeout(initMQTT, 5000);
+    }
+
+    function onConnectionLost(response) {
+      isConnected = false;
+      document.getElementById('mqttDot').className = "status-dot offline";
+      document.getElementById('mqttText').innerText = "MQTT: MẤT KẾT NỐI";
+      addLog("Mất kết nối Broker. Tự động kết nối lại...", "warn");
+      setTimeout(initMQTT, 4000);
+    }
+
+    // 4. TIẾP NHẬN BẢN TIN (ON MESSAGE ARRIVED)
+    function onMessageArrived(message) {
+      const topic = message.destinationName;
+      const payload = message.payloadString;
+
+      // 4.1. LWT STATUS
+      if (topic === TOPIC_STATUS) {
+        const isOnline = payload.trim().toUpperCase() === "ONLINE";
+        document.getElementById('stationDot').className = isOnline ? "status-dot online" : "status-dot offline";
+        document.getElementById('stationText').innerText = isOnline ? "TRẠM AO: ONLINE" : "TRẠM AO: OFFLINE (MẤT KẾT NỐI)";
+        addLog(`Trạng thái Trạm ao (LWT): ${payload}`, isOnline ? "ok" : "alert");
+      }
+
+      // 4.2. TELEMETRY PACKET
+      else if (topic === TOPIC_TELEMETRY) {
+        try {
+          const data = JSON.parse(payload);
+          updateTelemetryUI(data);
+        } catch (e) {
+          console.error("Lỗi parse JSON telemetry:", e);
+        }
+      }
+
+      // 4.3. ALERT EVENT
+      else if (topic === TOPIC_ALERT) {
+        try {
+          const alertData = JSON.parse(payload);
+          handleAlertEvent(alertData);
+        } catch (e) {
+          console.error("Lỗi parse JSON alert:", e);
+        }
+      }
+    }
+
+    // 5. CẬP NHẬT GIAO DIỆN TỪ GÓI TIN TELEMETRY
+    function updateTelemetryUI(data) {
+      // 1. Cập nhật số đo
+      document.getElementById('valDO').innerText = data.do.toFixed(1);
+      document.getElementById('valTemp').innerText = data.temp.toFixed(1);
+      document.getElementById('valPH').innerText = data.ph.toFixed(1);
+      document.getElementById('valSal').innerText = data.sal.toFixed(1);
+      document.getElementById('valFanAmp').innerText = data.fan_amp.toFixed(1);
+      document.getElementById('valWater').innerText = data.water_cm;
+      document.getElementById('uptimeVal').innerText = data.uptime_s + "s";
+
+      // 2. Đánh giá ngưỡng & đổi màu nhãn
+      // DO
+      const tagDO = document.getElementById('tagDO');
+      if (data.do < 3.5) {
+        tagDO.className = "status-tag tag-danger"; tagDO.innerText = "NGUY HIỂM: THIẾU OXY";
+      } else if (data.do < 4.5) {
+        tagDO.className = "status-tag tag-warn"; tagDO.innerText = "CẢNH BÁO THẤP";
+      } else {
+        tagDO.className = "status-tag tag-safe"; tagDO.innerText = "BÌNH THƯỜNG";
+      }
+
+      // Fan Current
+      const tagFan = document.getElementById('tagFanAmp');
+      if (data.fan_amp > 16.0) {
+        tagFan.className = "status-tag tag-danger"; tagFan.innerText = "QUÁ TẢI - KẸT CÁNH";
+      } else {
+        tagFan.className = "status-tag tag-safe"; tagFan.innerText = "BÌNH THƯỜNG";
+      }
+
+      // pH
+      const tagPH = document.getElementById('tagPH');
+      if (data.ph < 6.5 || data.ph > 9.0) {
+        tagPH.className = "status-tag tag-danger"; tagPH.innerText = "pH BẤT THƯỜNG";
+      } else {
+        tagPH.className = "status-tag tag-safe"; tagPH.innerText = "AN TOÀN";
+      }
+
+      // 3. Trạng thái thiết bị (Relay 1, Relay 2, Servo)
+      currentRelay1 = data.relay1;
+      currentRelay2 = data.relay2;
+      currentAlertMode = data.alert_mode;
+
+      const indR1 = document.getElementById('indRelay1');
+      const btnR1 = document.getElementById('btnRelay1');
+      if (currentRelay1) {
+        indR1.className = "actuator-indicator active";
+        btnR1.className = "btn-toggle btn-on";
+        btnR1.innerText = "QUẠT 1: ĐANG BẬT";
+      } else {
+        indR1.className = "actuator-indicator";
+        btnR1.className = "btn-toggle";
+        btnR1.innerText = "QUẠT 1: ĐANG TẮT";
+      }
+
+      const indR2 = document.getElementById('indRelay2');
+      const btnR2 = document.getElementById('btnRelay2');
+      if (currentRelay2) {
+        indR2.className = "actuator-indicator active";
+        btnR2.className = "btn-toggle btn-on";
+        btnR2.innerText = "QUẠT 2: ĐANG BẬT";
+      } else {
+        indR2.className = "actuator-indicator";
+        btnR2.className = "btn-toggle";
+        btnR2.innerText = "QUẠT 2: ĐANG TẮT";
+      }
+
+      // Servo
+      const indServo = document.getElementById('indServo');
+      if (data.feeder_deg > 0) {
+        indServo.className = "actuator-indicator active";
+      } else if (currentAlertMode) {
+        indServo.className = "actuator-indicator locked";
+      } else {
+        indServo.className = "actuator-indicator";
+      }
+
+      // Interlock & Alarm status
+      const interlockBadge = document.getElementById('interlockBadge');
+      const alarmStatusText = document.getElementById('alarmStatusText');
+      const indBuzzer = document.getElementById('indBuzzer');
+
+      if (currentAlertMode) {
+        interlockBadge.className = "status-tag tag-danger";
+        interlockBadge.innerText = "INTERLOCK: KHÓA CỨNG AN TOÀN";
+        alarmStatusText.innerHTML = "BÁO ĐỘNG SỰ CỐ (LED Đỏ + Còi hú)";
+        alarmStatusText.style.color = "#ef4444";
+        indBuzzer.className = "actuator-indicator locked";
+        document.getElementById('btnFeed').disabled = true; // Khóa nút cho ăn
+      } else {
+        interlockBadge.className = "status-tag tag-safe";
+        interlockBadge.innerText = "INTERLOCK: SẴN SÀNG";
+        alarmStatusText.innerHTML = "Trạng thái: An toàn (LED Xanh)";
+        alarmStatusText.style.color = "#10b981";
+        indBuzzer.className = "actuator-indicator";
+        document.getElementById('btnFeed').disabled = false;
+      }
+
+      // Đồng bộ checkbox Sandbox nếu ESP32 đang báo chế độ tương ứng
+      if (!isUserInteractingSandbox) {
+        const chk = document.getElementById('chkSandboxMode');
+        if (chk.checked !== data.sandbox) {
+          chk.checked = data.sandbox;
+          updateSandboxUIState(data.sandbox);
+        }
+      }
+
+      // 4. Đẩy dữ liệu vào Biểu đồ Chart.js
+      const timeStr = new Date().toLocaleTimeString('vi-VN', { hour12: false });
+      liveChart.data.labels.push(timeStr);
+      liveChart.data.datasets[0].data.push(data.do);
+      liveChart.data.datasets[1].data.push(data.ph);
+
+      if (liveChart.data.labels.length > MAX_DATA_POINTS) {
+        liveChart.data.labels.shift();
+        liveChart.data.datasets[0].data.shift();
+        liveChart.data.datasets[1].data.shift();
+      }
+      liveChart.update();
+    }
+
+    // 6. XỬ LÝ SỰ KIỆN CẢNH BÁO (ALERT POPUP & SOUND)
+    function handleAlertEvent(alertData) {
+      const banner = document.getElementById('alertBanner');
+      if (alertData.alert) {
+        banner.style.display = "flex";
+        document.getElementById('alertTitle').innerText = `${alertData.type}: ${alertData.message}`;
+        document.getElementById('alertMsg').innerText = `DO=${alertData.do} mg/L | Dòng quạt=${alertData.fan_amp}A | pH=${alertData.ph}. Hệ thống đã tự động bật 100% quạt và khóa máy cho ăn!`;
+        playAlertSound();
+        addLog(`[ALERT KHẨN CẤP] ${alertData.message} (DO=${alertData.do}, I=${alertData.fan_amp}A)`, "alert");
+      } else {
+        banner.style.display = "none";
+        addLog("[THÔNG BÁO] " + alertData.message, "ok");
+      }
+    }
+
+    function dismissAlert() {
+      document.getElementById('alertBanner').style.display = "none";
+    }
+
+    // Web Audio API beep
+    function playAlertSound() {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime); // 880 Hz
+        osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.4);
+        gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.4);
+      } catch (e) {
+        console.warn("Không thể phát âm thanh cảnh báo:", e);
+      }
+    }
+
+    // 7. ĐIỀU KHIỂN TỪ XA QUA MQTT (KB4 - MỤC 5.2.4)
+    function sendMqttCommand(payloadObj) {
+      if (!isConnected) {
+        alert("Chưa kết nối tới MQTT Broker! Vui lòng kiểm tra mạng.");
+        return;
+      }
+      const msgStr = JSON.stringify(payloadObj);
+      const message = new Paho.MQTT.Message(msgStr);
+      message.destinationName = TOPIC_CONTROL;
+      message.qos = 1;
+      mqttClient.send(message);
+      addLog(`[LỆNH ĐIỀU KHIỂN]: Đã gửi -> ${msgStr}`, "info");
+    }
+
+    function toggleRelay(device) {
+      if (currentAlertMode) {
+        alert("CẢNH BÁO AN TOÀN (INTERLOCK):\nAo nuôi đang trong luồng sự cố khẩn cấp! Hệ thống nghiêm cấm can thiệp tắt quạt thủ công.");
+        return;
+      }
+      const currentState = (device === 'relay1') ? currentRelay1 : currentRelay2;
+      const nextAction = currentState ? "OFF" : "ON";
+      sendMqttCommand({ device: device, action: nextAction });
+    }
+
+    function triggerFeed() {
+      if (currentAlertMode) {
+        alert("CẢNH BÁO AN TOÀN (INTERLOCK):\nOxy hòa tan đang thấp hoặc môi trường xấu! Đã khóa máy cho ăn để chống thối nước đáy ao.");
+        return;
+      }
+      sendMqttCommand({ device: "feeder", action: "FEED" });
+    }
+
+    // 8. DIGITAL TWIN TESTBENCH LOGIC (MỤC 4.3.3)
+    let isUserInteractingSandbox = false;
+
+    function onToggleSandboxMode() {
+      const isSandbox = document.getElementById('chkSandboxMode').checked;
+      isUserInteractingSandbox = true;
+      updateSandboxUIState(isSandbox);
+
+      if (isSandbox) {
+        addLog("ĐÃ KÍCH HOẠT DIGITAL TWIN SANDBOX! Các giá trị trượt sẽ gửi xuống ESP32.", "warn");
+        sendSandboxData();
+      } else {
+        addLog("ĐÃ TẮT SANDBOX! ESP32 trở về đọc cảm biến thực tế trên Wokwi.", "ok");
+        sendMqttSandboxPacket({ sandbox: false });
+      }
+      setTimeout(() => { isUserInteractingSandbox = false; }, 1000);
+    }
+
+    function updateSandboxUIState(isSandbox) {
+      const container = document.getElementById('slidersContainer');
+      const modeBadge = document.getElementById('modeBadge');
+      const scSafe = document.getElementById('btnScSafe');
+      const scOxy = document.getElementById('btnScOxy');
+      const scFan = document.getElementById('btnScFan');
+
+      if (isSandbox) {
+        container.style.opacity = "1";
+        container.style.pointerEvents = "auto";
+        modeBadge.className = "status-tag tag-warn";
+        modeBadge.innerText = "CHẾ ĐỘ DIGITAL TWIN (TESTBENCH)";
+        scSafe.disabled = false;
+        scOxy.disabled = false;
+        scFan.disabled = false;
+      } else {
+        container.style.opacity = "0.45";
+        container.style.pointerEvents = "none";
+        modeBadge.className = "status-tag tag-safe";
+        modeBadge.innerText = "CHẾ ĐỘ LIVE (CẢM BIẾN WOKWI)";
+        scSafe.disabled = true;
+        scOxy.disabled = true;
+        scFan.disabled = true;
+      }
+    }
+
+    function onSliderChange() {
+      // Cập nhật text preview
+      document.getElementById('sbValDO').innerText = parseFloat(document.getElementById('slDO').value).toFixed(1);
+      document.getElementById('sbValTemp').innerText = parseFloat(document.getElementById('slTemp').value).toFixed(1);
+      document.getElementById('sbValPH').innerText = parseFloat(document.getElementById('slPH').value).toFixed(1);
+      document.getElementById('sbValFanAmp').innerText = parseFloat(document.getElementById('slFanAmp').value).toFixed(1);
+      document.getElementById('sbValSal').innerText = parseFloat(document.getElementById('slSal').value).toFixed(1);
+      document.getElementById('sbValWater').innerText = document.getElementById('slWater').value;
+
+      sendSandboxDataDebounced();
+    }
+
+    let sandboxDebounceTimer = null;
+    function sendSandboxDataDebounced() {
+      clearTimeout(sandboxDebounceTimer);
+      sandboxDebounceTimer = setTimeout(sendSandboxData, 150); // Gửi sau 150ms khi dừng kéo
+    }
+
+    function sendSandboxData() {
+      const payload = {
+        sandbox: true,
+        do: parseFloat(document.getElementById('slDO').value),
+        temp: parseFloat(document.getElementById('slTemp').value),
+        ph: parseFloat(document.getElementById('slPH').value),
+        fan_amp: parseFloat(document.getElementById('slFanAmp').value),
+        sal: parseFloat(document.getElementById('slSal').value),
+        water: parseFloat(document.getElementById('slWater').value)
+      };
+      sendMqttSandboxPacket(payload);
+      addLog(`[TESTBENCH GỬI] DO=${payload.do}, T=${payload.temp}, pH=${payload.ph}, I=${payload.fan_amp}A`, "info");
+    }
+
+    function sendMqttSandboxPacket(payloadObj) {
+      if (!isConnected) return;
+      const msgStr = JSON.stringify(payloadObj);
+      const message = new Paho.MQTT.Message(msgStr);
+      message.destinationName = TOPIC_SANDBOX;
+      message.qos = 0;
+      mqttClient.send(message);
+    }
+
+    // Áp dụng các kịch bản mẫu nhanh (Mục 5.2 Sườn Báo cáo)
+    function applyScenario(type) {
+      if (!document.getElementById('chkSandboxMode').checked) {
+        document.getElementById('chkSandboxMode').checked = true;
+        updateSandboxUIState(true);
+      }
+
+      if (type === 'safe') {
+        // KB 1: Môi trường an toàn lý tưởng (5.2.1)
+        document.getElementById('slDO').value = 5.2;
+        document.getElementById('slTemp').value = 28.5;
+        document.getElementById('slPH').value = 7.8;
+        document.getElementById('slFanAmp').value = 9.5;
+        document.getElementById('slSal').value = 18;
+        document.getElementById('slWater').value = 120;
+        addLog("[KỊCH BẢN 1 - MỤC 5.2.1]: Thiết lập thông số Môi trường an toàn lý tưởng.", "ok");
+      } else if (type === 'drop_oxy') {
+        // KB 2: Báo động sụt Oxy ban đêm (5.2.2)
+        document.getElementById('slDO').value = 2.8; // < 3.5 mg/L
+        document.getElementById('slTemp').value = 27.5;
+        document.getElementById('slPH').value = 7.6;
+        document.getElementById('slFanAmp').value = 9.5;
+        addLog("[KỊCH BẢN 2 - MỤC 5.2.2]: Kích hoạt Sụt Oxy cấp tính (DO = 2.8 mg/L)!", "alert");
+      } else if (type === 'fan_jam') {
+        // KB 3: Báo động quạt kẹt / quá tải motor (5.2.3)
+        document.getElementById('slDO').value = 5.0;
+        document.getElementById('slFanAmp').value = 18.5; // > 16.0 A
+        addLog("[KỊCH BẢN 3 - MỤC 5.2.3]: Tăng dòng tải mô tơ quạt (I = 18.5A - Quá tải)!", "warn");
+      }
+
+      onSliderChange();
+    }
+
+    // 9. HELPER: TESTBENCH LOGGING
+    function addLog(text, level = "info") {
+      const terminal = document.getElementById('testLogTerminal');
+      const timeStr = new Date().toLocaleTimeString('vi-VN', { hour12: false });
+      const item = document.createElement('div');
+      item.className = "log-item";
+
+      let levelClass = "";
+      if (level === "ok") levelClass = "log-ok";
+      if (level === "warn") levelClass = "log-warn";
+      if (level === "alert") levelClass = "log-alert";
+
+      item.innerHTML = `<span class="log-time">[${timeStr}]</span> <span class="${levelClass}">${text}</span>`;
+      terminal.appendChild(item);
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    // Khởi chạy khi tài liệu tải xong
+    window.addEventListener('load', () => {
+      initMQTT();
+    });
+  </script>
+</body>
+
+</html>
