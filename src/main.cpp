@@ -148,14 +148,15 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
     DeserializationError err = deserializeJson(doc, message);
     if (!err) {
       if (doc.containsKey("sandbox")) {
-        sandboxMode = doc["sandbox"];
+        sandboxMode = doc["sandbox"].as<bool>();
       }
-      if (doc.containsKey("temp"))    sbTemp    = doc["temp"];
-      if (doc.containsKey("do"))      sbDO      = doc["do"];
-      if (doc.containsKey("ph"))      sbPH      = doc["ph"];
-      if (doc.containsKey("sal"))     sbSal     = doc["sal"];
-      if (doc.containsKey("fan_amp")) sbFanAmp  = doc["fan_amp"];
-      if (doc.containsKey("water"))   sbWater   = doc["water"];
+      // Giới hạn giá trị đầu vào (Input Validation / Range Checking) để phòng chống dữ liệu bất thường
+      if (doc.containsKey("temp"))    sbTemp    = constrain(doc["temp"].as<float>(), 0.0f, 50.0f);
+      if (doc.containsKey("do"))      sbDO      = constrain(doc["do"].as<float>(), 0.0f, 15.0f);
+      if (doc.containsKey("ph"))      sbPH      = constrain(doc["ph"].as<float>(), 0.0f, 14.0f);
+      if (doc.containsKey("sal"))     sbSal     = constrain(doc["sal"].as<float>(), 0.0f, 50.0f);
+      if (doc.containsKey("fan_amp")) sbFanAmp  = constrain(doc["fan_amp"].as<float>(), 0.0f, 30.0f);
+      if (doc.containsKey("water"))   sbWater   = constrain(doc["water"].as<float>(), 0.0f, 300.0f);
 
       Serial.printf(">> [SANDBOX] Che do: %s | DO=%.2f | pH=%.2f | T=%.1f | I=%.1fA\n",
                     sandboxMode ? "BẬT (Ghi đè Web)" : "TẮT (Dùng Cảm biến thật)",
@@ -168,8 +169,17 @@ void onMqttMessage(char* topic, byte* payload, unsigned int length) {
     StaticJsonDocument<256> doc;
     DeserializationError err = deserializeJson(doc, message);
     if (!err) {
+      // Vá lỗ hổng DoS Crash: Kiểm tra tồn tại khóa và con trỏ NULL trước khi xử lý chuỗi
+      if (!doc.containsKey("device") || !doc.containsKey("action")) {
+        Serial.println(">> [CANH BAO AN NINH]: Goi tin lenh thieu truong 'device' hoac 'action'!");
+        return;
+      }
+
       const char* device = doc["device"];
       const char* action = doc["action"];
+      if (!device || !action) {
+        return;
+      }
 
       // Khi đang trong chế độ Khẩn cấp (Sụt Oxy/Quá tải), KHÔNG cho phép tắt quạt thủ công
       // để bảo vệ an toàn sinh học (Interlock Enforcement)

@@ -1316,14 +1316,14 @@
       if (currentAlertMode) {
         interlockBadge.className = "status-tag tag-danger";
         interlockBadge.innerText = "INTERLOCK: KHÓA CỨNG AN TOÀN";
-        alarmStatusText.innerHTML = "BÁO ĐỘNG SỰ CỐ (LED Đỏ + Còi hú)";
+        alarmStatusText.textContent = "BÁO ĐỘNG SỰ CỐ (LED Đỏ + Còi hú)";
         alarmStatusText.style.color = "#ef4444";
         indBuzzer.className = "actuator-indicator locked";
         document.getElementById('btnFeed').disabled = true; // Khóa nút cho ăn
       } else {
         interlockBadge.className = "status-tag tag-safe";
         interlockBadge.innerText = "INTERLOCK: SẴN SÀNG";
-        alarmStatusText.innerHTML = "Trạng thái: An toàn (LED Xanh)";
+        alarmStatusText.textContent = "Trạng thái: An toàn (LED Xanh)";
         alarmStatusText.style.color = "#10b981";
         indBuzzer.className = "actuator-indicator";
         document.getElementById('btnFeed').disabled = false;
