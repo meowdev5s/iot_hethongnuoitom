@@ -5,6 +5,7 @@
 #include <DallasTemperature.h>
 #include <ESP32Servo.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 
@@ -33,19 +34,42 @@
 #define PIN_LED_GREEN    16  // Đèn LED trạng thái Bình thường
 #define PIN_LED_RED      14  // Đèn LED trạng thái Báo động sự cố
 
-// CẤU HÌNH KẾT NỐI WI-FI VÀ MQTT BROKER (HIVEMQ PUBLIC CLOUD)
-const char* WIFI_SSID     = "Wokwi-GUEST";
-const char* WIFI_PASSWORD = "";
+// =============================================================================
+// CẤU HÌNH KẾT NỐI WI-FI VÀ MQTT BROKER (NẠP TỪ SECRETS.H CỤC BỘ)
+// =============================================================================
+#if __has_include("secrets.h")
+  #include "secrets.h"
+#elif __has_include("../include/secrets.h")
+  #include "../include/secrets.h"
+#elif __has_include("secrets.example.h")
+  #include "secrets.example.h"
+#else
+  #define SECRET_WIFI_SSID        "Wokwi-GUEST"
+  #define SECRET_WIFI_PASSWORD    ""
+  #define SECRET_MQTT_BROKER      "your_cluster.ala.asia-southeast1.emqxsl.com"
+  #define SECRET_MQTT_PORT        8883
+  #define SECRET_MQTT_USER        "your_username"
+  #define SECRET_MQTT_PASSWORD    "your_password"
+  #define SECRET_TOPIC_PREFIX     "nhom2_quanhoicanh/farm/pond_01"
+#endif
 
-const char* MQTT_BROKER   = "broker.hivemq.com";
-const int   MQTT_PORT     = 1883;
+// Ánh xạ macro vào các biến cấu hình firmware
+const char* WIFI_SSID     = SECRET_WIFI_SSID;
+const char* WIFI_PASSWORD = SECRET_WIFI_PASSWORD;
+
+// Máy chủ EMQX Cloud Serverless bảo mật riêng
+const char* MQTT_BROKER   = SECRET_MQTT_BROKER;
+const int   MQTT_PORT     = SECRET_MQTT_PORT;
+const char* MQTT_USER     = SECRET_MQTT_USER;
+const char* MQTT_PASSWORD = SECRET_MQTT_PASSWORD;
 
 // Cây Topic MQTT chuẩn hóa định danh nhóm
-const char* TOPIC_STATUS    = "nhom2_quanhoicanh/farm/pond_01/status";    // LWT & Online status (Retained)
-const char* TOPIC_TELEMETRY = "nhom2_quanhoicanh/farm/pond_01/telemetry"; // Dữ liệu định kỳ (QoS 0)
-const char* TOPIC_ALERT     = "nhom2_quanhoicanh/farm/pond_01/alert";     // Báo động sự cố khẩn cấp (QoS 1)
-const char* TOPIC_CONTROL   = "nhom2_quanhoicanh/farm/pond_01/control";   // Nhận lệnh điều khiển (Quạt/Cho ăn)
-const char* TOPIC_SANDBOX   = "nhom2_quanhoicanh/farm/pond_01/sandbox";   // Nhận thông số Digital Twin Testbench
+const char* TOPIC_STATUS    = SECRET_TOPIC_PREFIX "/status";    // LWT & Online status (Retained)
+const char* TOPIC_TELEMETRY = SECRET_TOPIC_PREFIX "/telemetry"; // Dữ liệu định kỳ (QoS 0)
+const char* TOPIC_ALERT     = SECRET_TOPIC_PREFIX "/alert";     // Báo động sự cố khẩn cấp (QoS 1)
+const char* TOPIC_CONTROL   = SECRET_TOPIC_PREFIX "/control";   // Nhận lệnh điều khiển (Quạt/Cho ăn)
+const char* TOPIC_SANDBOX   = SECRET_TOPIC_PREFIX "/sandbox";   // Nhận thông số Digital Twin Testbench
+
 
 // KHAI BÁO CÁC ĐỐI TƯỢNG VÀ BIẾN TOÀN CỤC
 LiquidCrystal_I2C lcd(LCD_I2C_ADDR, 20, 4);
@@ -53,7 +77,7 @@ OneWire oneWire(PIN_ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 Servo feederServo;
 
-WiFiClient espClient;
+WiFiClientSecure espClient; // Kết nối bảo mật TLS
 PubSubClient mqttClient(espClient);
 
 // Biến lưu thông số môi trường thực tế
@@ -102,6 +126,12 @@ float readDistanceCM() {
 
 // CALLBACK XỬ LÝ LỆNH TỪ CLOUD (CONTROL & SANDBOX)
 void onMqttMessage(char* topic, byte* payload, unsigned int length) {
+  // Biện pháp an ninh Anti-DoS: Chặn các gói tin có kích thước bất thường làm tràn RAM
+  if (length > 512) {
+    Serial.println("\n>> [CANH BAO AN NINH]: Goi tin qua lon (>512 bytes), tu choi xu ly!");
+    return;
+  }
+
   String message = "";
   for (unsigned int i = 0; i < length; i++) {
     message += (char)payload[i];
@@ -200,7 +230,7 @@ void reconnectMQTT() {
   if (now - lastMqttRetry < 4000) return; // Thử lại mỗi 4 giây (Non-blocking)
   lastMqttRetry = now;
 
-  Serial.print("[MQTT] Đang kết nối tới HiveMQ Broker (broker.hivemq.com)... ");
+  Serial.printf("[MQTT] Dang ket noi bao mat TLS toi %s:%d... ", MQTT_BROKER, MQTT_PORT);
   String clientId = "ESP32_ShrimpFarm_Pond01_" + String(random(0xffff), HEX);
 
   // Cấu hình LWT (Last Will and Testament - Mục 4.2.3):
@@ -210,8 +240,9 @@ void reconnectMQTT() {
   bool        willRetain  = true;
   const char* willMessage = "Offline";
 
-  if (mqttClient.connect(clientId.c_str(), nullptr, nullptr, willTopic, willQos, willRetain, willMessage)) {
-    Serial.println("THÀNH CÔNG!");
+  // Kết nối có xác thực danh tính (Username / Password) qua TLS
+  if (mqttClient.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD, willTopic, willQos, willRetain, willMessage)) {
+    Serial.println("THÀNH CÔNG (TLS AUTH OK)!");
 
     // Phát trạng thái Online khi kết nối thành công (Retained)
     mqttClient.publish(TOPIC_STATUS, "Online", true);
@@ -277,7 +308,8 @@ void setup() {
   delay(1200);
   lcd.clear();
 
-  // Khởi tạo Wi-Fi và MQTT Client
+  // Khởi tạo Wi-Fi và MQTT Client bảo mật TLS
+  espClient.setInsecure(); // Kích hoạt mã hóa TLS 1.2/1.3 đối xứng an toàn
   setupWiFi();
   mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
   mqttClient.setCallback(onMqttMessage);

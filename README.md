@@ -35,15 +35,23 @@ Hệ thống hoạt động theo mô hình phân tầng chuẩn công nghiệp (
 
 ```text
 MoPhong_AoTom_Wokwi/
+├── include/
+│   ├── secrets.h          # File bảo mật cục bộ ESP32 (Đã Gitignore - Không push lên Git)
+│   └── secrets.example.h  # File mẫu cấu hình WiFi/MQTT cho ESP32 Firmware
 ├── src/
-│   └── main.cpp           # Mã nguồn C++ ESP32 (Đọc cảm biến, Interlock, MQTT Client, Sandbox)
+│   └── main.cpp           # Mã nguồn C++ ESP32 (Đọc cảm biến, Interlock, MQTT TLS Client, Sandbox)
 ├── web/
-│   └── index.html          # Giao diện Web Dashboard SCADA + Digital Twin Testbench (All-in-one)
-├── diagram.json            # Sơ đồ mạch điện Wokwi (ESP32 + 13 ngoại vi kết nối chuẩn hóa)
-├── platformio.ini          # Cấu hình nạp PlatformIO (Espressif32, tự tải đủ 6 thư viện)
-├── wokwi.toml              # File cấu hình liên kết Wokwi với file binary firmware.bin
-├── libraries.txt           # Danh mục thư viện dùng khi import lên web Wokwi.com
-└── README.md               # Tài liệu hướng dẫn sử dụng và kiểm thử dự án
+│   ├── index.html         # Giao diện Web Dashboard SCADA + Digital Twin Testbench
+│   ├── config.js          # File cấu hình bảo mật Web cục bộ (Đã Gitignore)
+│   └── config.example.js  # File mẫu cấu hình Web Dashboard Client
+├── .env                   # Biến môi trường tổng thể dự án (Đã Gitignore)
+├── .env.example           # File mẫu biến môi trường
+├── .gitignore             # Danh mục loại trừ mật khẩu và binary khỏi GitHub
+├── diagram.json           # Sơ đồ mạch điện Wokwi (ESP32 + 13 ngoại vi kết nối chuẩn hóa)
+├── platformio.ini         # Cấu hình nạp PlatformIO (Espressif32, tự tải đủ 6 thư viện)
+├── wokwi.toml             # File cấu hình liên kết Wokwi với file binary firmware.bin
+├── libraries.txt          # Danh mục thư viện dùng khi import lên web Wokwi.com
+└── README.md              # Tài liệu hướng dẫn sử dụng và kiểm thử dự án
 ```
 
 ---
@@ -71,7 +79,19 @@ Chỉ cần máy tính có kết nối Internet và các phần mềm sau:
 - Khởi động VS Code.
 - Chọn `File` -> `Open Folder...` -> Trỏ đến thư mục `MoPhong_AoTom_Wokwi`.
 
-#### Bước 2: Biên dịch Firmware (PlatformIO)
+#### Bước 2: Thiết lập cấu hình bảo mật cục bộ (Local Secrets)
+
+Dự án áp dụng cơ chế bảo mật cô lập tài khoản mật khẩu (đã đưa vào `.gitignore` để không bao giờ bị lộ lên GitHub). Trước khi chạy lần đầu:
+
+1. **Cấu hình ESP32 Firmware:**
+   - Sao chép file `include/secrets.example.h` thành file `include/secrets.h`.
+   - Mở `include/secrets.h` và điền thông tin cụm EMQX Cloud, tài khoản & mật khẩu của bạn.
+2. **Cấu hình Web Dashboard SCADA:**
+   - Sao chép file `web/config.example.js` thành file `web/config.js`.
+   - Mở `web/config.js` và điền thông tin kết nối WebSocket (cổng `8084`).
+3. *(Tùy chọn)* Sao chép `.env.example` thành `.env` để quản lý biến môi trường tập trung.
+
+#### Bước 3: Biên dịch Firmware (PlatformIO)
 
 - Nhìn xuống thanh trạng thái màu xanh dưới cùng của VS Code:
   - Nhấp vào biểu tượng **dấu tích (✓)** (`PlatformIO: Build`) để biên dịch.
@@ -82,22 +102,22 @@ Chỉ cần máy tính có kết nối Internet và các phần mềm sau:
 - Chờ PlatformIO tự động tải các thư viện (`PubSubClient`, `ArduinoJson`, `LiquidCrystal_I2C`, `DallasTemperature`, `ESP32Servo`) và hiển thị thông báo `[SUCCESS]`.
 - File firmware sẽ được tự động tạo tại: `.pio/build/az-delivery-devkit-v4/firmware.bin`.
 
-#### Bước 3: Khởi chạy mô phỏng mạch Wokwi
+#### Bước 4: Khởi chạy mô phỏng mạch Wokwi
 
 - Mở file `diagram.json` trong cây thư mục VS Code.
 - Trên góc giao diện sơ đồ mạch, bấm nút **Start Simulation** (hình tam giác màu xanh) hoặc nhấn phím tắt `F1` -> gõ `Wokwi: Start Simulation`.
 - Quan sát:
   - ESP32 kết nối mạng Wi-Fi ảo `Wokwi-GUEST`.
-  - Kết nối tới Cloud MQTT Broker.
+  - Kết nối bảo mật TLS 8883 tới Private EMQX Cloud Broker.
   - Màn hình LCD 20x4 sáng đèn và hiển thị thông số khởi động của ao nuôi.
 
-#### Bước 4: Mở giao diện Web Dashboard
+#### Bước 5: Mở giao diện Web Dashboard
 
 - Tìm đến file `web/index.html` trong thư mục dự án.
 - **Cách đơn giản nhất:** Chuột phải vào file `index.html` -> Chọn `Reveal in File Explorer` -> Click đúp chuột để mở trực tiếp trên trình duyệt Chrome/Edge.
 - *Hoặc nếu có extension Live Server:* Chuột phải vào `index.html` -> Chọn `Open with Live Server`.
 - Quan sát góc trên bên phải trang Web:
-  - Đèn báo mạng: `MQTT: ONLINE (WSS:8884)` (Xanh lá).
+  - Đèn báo mạng: `MQTT: ONLINE (EMQX TLS:8084)` (Xanh lá).
   - Đèn báo trạm: `TRẠM AO: ONLINE` (Khi Wokwi đang chạy).
   - 6 thẻ chỉ số và đồ thị bắt đầu cập nhật dữ liệu tự động.
 
@@ -183,7 +203,11 @@ Sơ đồ kết nối đã được tối ưu, sử dụng hoàn toàn khối **
 
 ## 7. CÂY TOPIC MQTT CLOUD
 
-Hệ thống giao tiếp qua máy chủ công cộng: `broker.hivemq.com`
+Hệ thống giao tiếp qua cụm máy chủ đám mây riêng biệt **EMQX Cloud Serverless** với mã hóa an toàn TLS đạt chuẩn công nghiệp:
+- **Broker Host:** Được định cấu hình linh hoạt qua `.env` / `secrets.h` / `config.js` (không lộ trên GitHub).
+- **Cổng MQTTS (ESP32):** `8883` (Mã hóa TLS 1.2/1.3 qua `WiFiClientSecure`)
+- **Cổng WSS (Web Dashboard):** `8084` (WebSocket Secure `wss://`)
+- **Tài khoản xác thực (Authentication):** Được thiết lập qua biến môi trường (xem file mẫu `.env.example`).
 
 | Tên Topic                 | Hướng truyền |    QoS    | Chức năng                                                                                                 |
 | :------------------------- | :--------------: | :--------: | :---------------------------------------------------------------------------------------------------------- |
@@ -199,7 +223,8 @@ Hệ thống giao tiếp qua máy chủ công cộng: `broker.hivemq.com`
 
 1. **Web báo `MQTT: MẤT KẾT NỐI`:**
    - Kiểm tra đường truyền Internet của máy tính.
-   - Broker HiveMQ sử dụng cổng WebSocket Secure `8884` (`wss://`). Đảm bảo tường lửa hoặc mạng Wi-Fi không chặn cổng 8884.
+   - Broker EMQX Cloud sử dụng cổng WebSocket Secure `8084` (`wss://`). Đảm bảo tường lửa hoặc mạng Wi-Fi không chặn cổng 8084.
+   - Kiểm tra xem đã tạo file `web/config.js` từ `web/config.example.js` và điền chính xác tài khoản hay chưa.
 2. **Web báo `TRẠM AO: CHỜ TÍN HIỆU (LWT)`:**
    - Do mô phỏng Wokwi chưa được bật. Hãy mở file `diagram.json` và nhấn nút Play màu xanh để khởi động ESP32.
 3. **Wokwi báo lỗi thiếu file `.bin`:**

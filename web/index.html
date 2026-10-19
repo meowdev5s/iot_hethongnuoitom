@@ -1037,20 +1037,30 @@
 
   </div>
 
+  <!-- FILE CẤU HÌNH BẢO MẬT CỤC BỘ (Nạp window.ENV_CONFIG từ config.js) -->
+  <script src="config.js"></script>
+
   <!-- JAVASCRIPT LOGIC -->
   <script>
-    // 1. CẤU HÌNH MQTT WEBSOCKET
-    const MQTT_HOST = "broker.hivemq.com";
-    const MQTT_PORT = 8884; // WebSocket Secure port của HiveMQ Cloud
-    const MQTT_PATH = "/mqtt";
+    // 1. CẤU HÌNH MQTT WEBSOCKET (Nạp linh hoạt từ window.ENV_CONFIG trong config.js)
+    const env = window.ENV_CONFIG || {};
+    if (!window.ENV_CONFIG) {
+      console.warn("[SECURITY NOTICE] Không tìm thấy file config.js! Vui lòng sao chép config.example.js thành config.js và điền thông tin đăng nhập.");
+    }
+    const MQTT_HOST = env.MQTT_HOST || "your_cluster_id.ala.asia-southeast1.emqxsl.com";
+    const MQTT_PORT = env.MQTT_PORT || 8084; // WebSocket Secure port của EMQX Cloud
+    const MQTT_PATH = env.MQTT_PATH || "/mqtt";
+    const MQTT_USER = env.MQTT_USER || "your_username";
+    const MQTT_PASSWORD = env.MQTT_PASSWORD || "your_password";
+    const TOPIC_PREFIX = env.TOPIC_PREFIX || "nhom2_quanhoicanh/farm/pond_01";
     const CLIENT_ID = "WebDashboard_ShrimpFarm_" + Math.random().toString(16).substring(2, 8);
 
     // Cây Topics theo Mục 4.2 Sườn Báo cáo (Định danh nhóm riêng)
-    const TOPIC_STATUS = "nhom2_quanhoicanh/farm/pond_01/status";
-    const TOPIC_TELEMETRY = "nhom2_quanhoicanh/farm/pond_01/telemetry";
-    const TOPIC_ALERT = "nhom2_quanhoicanh/farm/pond_01/alert";
-    const TOPIC_CONTROL = "nhom2_quanhoicanh/farm/pond_01/control";
-    const TOPIC_SANDBOX = "nhom2_quanhoicanh/farm/pond_01/sandbox";
+    const TOPIC_STATUS = TOPIC_PREFIX + "/status";
+    const TOPIC_TELEMETRY = TOPIC_PREFIX + "/telemetry";
+    const TOPIC_ALERT = TOPIC_PREFIX + "/alert";
+    const TOPIC_CONTROL = TOPIC_PREFIX + "/control";
+    const TOPIC_SANDBOX = TOPIC_PREFIX + "/sandbox";
 
     let mqttClient = null;
     let isConnected = false;
@@ -1135,7 +1145,7 @@
 
     // 3. KẾT NỐI VÀ XỬ LÝ SỰ KIỆN MQTT
     function initMQTT() {
-      addLog("Khởi tạo kết nối HiveMQ Broker qua WSS...", "info");
+      addLog("Khởi tạo kết nối bảo mật tới EMQX Cloud WSS:8084...", "info");
       mqttClient = new Paho.MQTT.Client(MQTT_HOST, Number(MQTT_PORT), MQTT_PATH, CLIENT_ID);
 
       mqttClient.onConnectionLost = onConnectionLost;
@@ -1143,6 +1153,8 @@
 
       const connectOptions = {
         useSSL: true,
+        userName: MQTT_USER,
+        password: MQTT_PASSWORD,
         timeout: 5,
         keepAliveInterval: 30,
         cleanSession: true,
@@ -1160,8 +1172,8 @@
     function onConnectSuccess() {
       isConnected = true;
       document.getElementById('mqttDot').className = "status-dot online";
-      document.getElementById('mqttText').innerText = "MQTT: ONLINE (WSS:8884)";
-      addLog("Kết nối Broker thành công! Đang Subscribe các Topic...", "ok");
+      document.getElementById('mqttText').innerText = "MQTT: ONLINE (EMQX TLS:8084)";
+      addLog("Kết nối EMQX Cloud bảo mật thành công (TLS 1.2 Auth OK)!", "ok");
 
       mqttClient.subscribe(TOPIC_STATUS);
       mqttClient.subscribe(TOPIC_TELEMETRY);
@@ -1529,19 +1541,25 @@
       onSliderChange();
     }
 
-    // 9. HELPER: TESTBENCH LOGGING
+    // 9. HELPER: TESTBENCH LOGGING (VÁ LỖ HỔNG XSS - DOM SANITIZATION)
     function addLog(text, level = "info") {
       const terminal = document.getElementById('testLogTerminal');
       const timeStr = new Date().toLocaleTimeString('vi-VN', { hour12: false });
       const item = document.createElement('div');
       item.className = "log-item";
 
-      let levelClass = "";
-      if (level === "ok") levelClass = "log-ok";
-      if (level === "warn") levelClass = "log-warn";
-      if (level === "alert") levelClass = "log-alert";
+      const timeSpan = document.createElement('span');
+      timeSpan.className = "log-time";
+      timeSpan.textContent = `[${timeStr}]`;
 
-      item.innerHTML = `<span class="log-time">[${timeStr}]</span> <span class="${levelClass}">${text}</span>`;
+      const textSpan = document.createElement('span');
+      if (level === "ok") textSpan.className = "log-ok";
+      else if (level === "warn") textSpan.className = "log-warn";
+      else if (level === "alert") textSpan.className = "log-alert";
+      textSpan.textContent = " " + text; // textContent ngăn chặn 100% việc chèn thẻ HTML độc hại
+
+      item.appendChild(timeSpan);
+      item.appendChild(textSpan);
       terminal.appendChild(item);
       terminal.scrollTop = terminal.scrollHeight;
     }
